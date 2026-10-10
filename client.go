@@ -226,6 +226,15 @@ type Client struct {
 	// after decoding but before standard dispatch. See [RawNodeHandler].
 	RawNodeHandler RawNodeHandler
 
+	// ServerABPropsSync optionally completes a server AB-props task before its
+	// acknowledgement. Install before Connect. A nil handler preserves ordinary
+	// dispatch. A returned error withholds the ack; an ordinary unsuccessful sync
+	// may return nil after its task has completed. The receive loop remains free
+	// to process the IQ response. The handler must honor context cancellation.
+	ServerABPropsSync    func(context.Context) error
+	serverABPropsMu      sync.Mutex
+	serverABPropsPending map[string]struct{}
+
 	// DisabledFeatures controls which built-in processing paths are
 	// skipped. See [DisabledFeatures].
 	DisabledFeatures DisabledFeatures
