@@ -74,3 +74,61 @@ func TestABPropsAbsentUnrelatedFailedAndCancelled(t *testing.T) {
 		t.Fatal("missing child deferred")
 	}
 }
+
+func TestABPropsSyncHasBoundedContextAndReleasesCancelledTask(t *testing.T) {
+	started := make(chan time.Time, 1)
+	finished := make(chan struct{})
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	cli := &Client{ServerABPropsSync: func(ctx context.Context) error {
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			t.Error("unbounded callback")
+		}
+		started <- deadline
+		<-ctx.Done()
+		close(finished)
+		return ctx.Err()
+	}}
+	cli.deferServerABProps(ctx, abpropsNotification(), func() { t.Error("cancelled task acknowledged") })
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("callback not started")
+	}
+	select {
+	case <-finished:
+	case <-time.After(time.Second):
+		t.Fatal("callback not cancelled")
+	}
+	deadline := time.Now().Add(time.Second)
+	for {
+		cli.serverABPropsMu.Lock()
+		pending := len(cli.serverABPropsPending)
+		cli.serverABPropsMu.Unlock()
+		if pending == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("cancelled task retained its slot")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+func TestABPropsBackgroundTaskReceivesDeadline(t *testing.T) {
+	done := make(chan struct{})
+	cli := &Client{ServerABPropsSync: func(ctx context.Context) error {
+		deadline, ok := ctx.Deadline()
+		if !ok || time.Until(deadline) > 2*time.Minute || time.Until(deadline) <= 0 {
+			t.Error("invalid task deadline")
+		}
+		close(done)
+		return errors.New("incomplete")
+	}}
+	cli.deferServerABProps(context.Background(), abpropsNotification(), func() { t.Error("failed task acknowledged") })
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("callback not started")
+	}
+}

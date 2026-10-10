@@ -601,6 +601,9 @@ func (cli *Client) deferServerABProps(ctx context.Context, node *waBinary.Node, 
 	cli.serverABPropsPending[key] = struct{}{}
 	cli.serverABPropsMu.Unlock()
 	go func() {
+		// Allow three 30-second attempts, two retry waits and durable completion.
+		taskCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
 		defer func() {
 			cli.serverABPropsMu.Lock()
 			delete(cli.serverABPropsPending, key)
@@ -609,7 +612,7 @@ func (cli *Client) deferServerABProps(ctx context.Context, node *waBinary.Node, 
 		if ctx.Err() != nil {
 			return
 		}
-		if err := cli.ServerABPropsSync(ctx); err == nil && ctx.Err() == nil {
+		if err := cli.ServerABPropsSync(taskCtx); err == nil && taskCtx.Err() == nil {
 			ack()
 		}
 	}()
