@@ -33,7 +33,7 @@ jobs:
 
     - name: Install goimports
       run: |
-        # Pinned: x/tools @latest needs go >= 1.26, the 1.25 job runs with GOTOOLCHAIN=local.
+        # x/tools v0.50.0+ requires Go 1.26; pin the last release that builds on the old matrix entry.
         go install golang.org/x/tools/cmd/goimports@v0.49.0
         export PATH="$HOME/go/bin:$PATH"
 
