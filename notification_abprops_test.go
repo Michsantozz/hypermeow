@@ -132,3 +132,16 @@ func TestABPropsBackgroundTaskReceivesDeadline(t *testing.T) {
 		t.Fatal("callback not started")
 	}
 }
+
+func TestABPropsSaturationWithholdsWithoutStartingAnotherTask(t *testing.T) {
+	cli := &Client{ServerABPropsSync: func(context.Context) error { t.Error("saturated callback started"); return nil }, serverABPropsPending: make(map[string]struct{})}
+	for i := 0; i < 256; i++ {
+		cli.serverABPropsPending[string(rune(i))] = struct{}{}
+	}
+	if !cli.deferServerABProps(context.Background(), abpropsNotification(), func() { t.Error("saturated notification acknowledged") }) {
+		t.Fatal("notification fell through to ordinary ack")
+	}
+	if len(cli.serverABPropsPending) != 256 {
+		t.Fatal("pending bound changed")
+	}
+}
