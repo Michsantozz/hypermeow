@@ -1,12 +1,13 @@
 module github.com/polymorfa/hypermeow
 
-go 1.25.0
+go 1.26.0
 
-toolchain go1.26.5
+toolchain go1.27.1
 
 retract (
-	v0.1.1 // Retraction carrier only; use @main or v0.0.0.
-	v0.1.0 // Published accidentally; use @main or v0.0.0.
+	v0.1.1 // Retraction carrier only; use @main.
+	v0.1.0 // Published accidentally; use @main.
+	v0.0.0 // Historical initial tag; use @main.
 )
 
 require (
@@ -15,11 +16,11 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/polymorfa/libsignal-protocol-go v0.2.3-0.20260806162910-a2adef2e8a11
 	github.com/rs/zerolog v1.35.1
-	go.mau.fi/util v0.9.12-0.20260717235539-f9ffa7eca58d
-	golang.org/x/crypto v0.54.0
-	golang.org/x/net v0.57.0
-	golang.org/x/sync v0.22.0
-	google.golang.org/protobuf v1.36.11
+	go.mau.fi/util v0.10.1
+	golang.org/x/crypto v0.57.0
+	golang.org/x/net v0.59.0
+	golang.org/x/sync v0.23.0
+	google.golang.org/protobuf v1.36.12
 )
 
 require (
@@ -27,9 +28,9 @@ require (
 	github.com/elliotchance/orderedmap/v3 v3.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/petermattis/goid v0.0.0-20260713124913-97594f28f5ca // indirect
+	github.com/petermattis/goid v0.0.0-20260820044319-269ab09b5261 // indirect
 	github.com/vektah/gqlparser/v2 v2.5.27 // indirect
-	golang.org/x/exp v0.0.0-20260709172345-9ea1abe57597 // indirect
-	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.40.0 // indirect
+	golang.org/x/exp v0.0.0-20260908205506-85c1c2202aba // indirect
+	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
 )

@@ -52,6 +52,9 @@ func (cli *Client) SendFBMessage(
 		err = ErrClientIsNil
 		return
 	}
+	if cli.isShadow() {
+		return resp, ErrShadowV3Unsupported
+	}
 	var req SendRequestExtra
 	if len(extra) > 1 {
 		err = errors.New("only one extra parameter may be provided to SendMessage")
@@ -130,6 +133,7 @@ func (cli *Client) SendFBMessage(
 		req.ID = cli.GenerateMessageID()
 	}
 	resp.ID = req.ID
+	resp.Chat = to
 
 	start := time.Now()
 	// Sending multiple messages at a time can cause weird issues and makes it harder to retry safely
@@ -607,6 +611,9 @@ func (cli *Client) encryptMessageForDeviceV3(
 	bundle *prekey.Bundle,
 	extraAttrs waBinary.Attrs,
 ) (*waBinary.Node, error) {
+	if cli.isShadow() {
+		return nil, ErrShadowV3Unsupported
+	}
 	builder := session.NewBuilderFromSignal(cli.Store, to.SignalAddress(), pbSerializer)
 	if bundle != nil {
 		cli.Log.Debugf("Processing prekey bundle for %s", to)

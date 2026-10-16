@@ -9,7 +9,7 @@ The upstream project remains the smaller choice for applications that only need 
 
 ## Why HyperMeow instead of upstream WhatsMeow?
 
-This comparison was last verified against upstream `main` at [`a23afe3`](https://github.com/tulir/whatsmeow/commit/a23afe3171803f34d6761979988b9d2275e961c7) on 2026-08-11. Each upstream sync must update this section when the difference changes.
+This comparison was last verified against upstream `main` at [`c386243`](https://github.com/tulir/whatsmeow/commit/c386243a72bacad080ba2938b37e1e4e0f1ca3b2) on 2026-10-10. Each upstream sync must update this section when the difference changes.
 
 | Area | HyperMeow advantage over upstream `main` |
 | --- | --- |
@@ -43,15 +43,28 @@ The complete three-repeat system matrix documents allocation, RSS, CPU, latency,
 
 ## Install
 
+HyperMeow requires Go 1.26 or newer; the module selects Go 1.27.1 as its preferred toolchain.
+
 Install the newest reviewed commit from the authoritative `main` branch:
 
 ```sh
 go get github.com/polymorfa/hypermeow@main
 ```
 
-The `main` query resolves to a commit pseudo-version. After the version correction,
-`v0.0.0` is the only selectable tagged version. `dev` is an integration branch and
-is never a publication source.
+The `main` query resolves to a commit pseudo-version. Pin the resulting
+pseudo-version in `go.mod` for reproducible builds. Every published semantic
+version is retracted: do not install HyperMeow with `@latest`, a version tag, or
+any feature branch.
+
+To experiment with changes that have not reached `main`, use the integration
+branch explicitly:
+
+```sh
+go get github.com/polymorfa/hypermeow@dev
+```
+
+`dev` is unstable and may be rebased. Do not use it in production or publish a
+library that depends on it.
 
 The root package remains named `whatsmeow`, so use an explicit import alias:
 
@@ -80,6 +93,20 @@ HyperMeow retains upstream's core support for:
 - retry receipts and message decryption recovery.
 
 New exported functionality is additive unless called out in the [changelog](CHANGELOG.md).
+
+`SendMessage` and `SendFBMessage` return the destination used for sending in
+`SendResponse.Chat`. `GetQRChannel` refreshes its active QR code when pairing
+secrets rotate. Full-sync fetch errors emit `events.AppStateSyncError` after
+releasing the sync lock, so a handler can retry the fetch.
+
+The `types/richresponse` package decodes rich bot responses. Known primitives
+retain their type names during JSON round trips; unknown primitives, view models,
+and text-entity metadata retain their raw JSON. Malformed known values return a
+decode error.
+
+Custom `store.ChatSettingsStore` implementations must add `PutWASARootSecretID`
+and `GetWASARootSecretID` for bot root-secret state. `sqlstore` adds this field
+through schema version 19; its existing migrations remain unchanged.
 
 ## Discord
 

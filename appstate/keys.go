@@ -69,6 +69,10 @@ const (
 	IndexSettingAutoOrganizeBusinessChat = "setting_autoOrganizeBusinessChat"
 	IndexCoexV2Version                   = "coexV2Version"
 	IndexLockMessage                     = "lock_message"
+	IndexContactManagerMetadata          = "contact_manager_metadata"
+	IndexBusinessFolderActivation        = "business_folder_activation"
+	IndexGroupHistoryToggle              = "group_history_toggle"
+	IndexBBProPendingCustomerBaseAction  = "bb_pro_pending_customer_base_action"
 )
 
 // Constants for the regular app state indexes.
@@ -105,6 +109,7 @@ const (
 	IndexBroadcast                                       = "broadcast"
 	IndexSubscriptionsSync                               = "subscriptions_sync_v2"
 	IndexLabelSublist                                    = "label_sublist"
+	IndexCTWAMessageReceived                             = "ctwa_message_received"
 )
 
 // Constants for the regular_high app state indexes.
@@ -127,6 +132,7 @@ const (
 	IndexNCTSaltSync                                  = "nct_salt_sync"
 	IndexBizAISettingsNudgeAction                     = "biz_ai_settings_nudge"
 	IndexWasaRootSecretAction                         = "wasa_root_secret"
+	IndexSharedDeviceAllowlist                        = "shared_device_allowlist"
 )
 
 // Constants for the critical_unblock_low app state indexes.
