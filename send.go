@@ -165,6 +165,9 @@ type SendRequestExtra struct {
 	MediaHandle string
 
 	Meta *types.MsgMetaInfo
+	// Recipients of a status broadcast (to status@broadcast). When empty, the recipients come
+	// from the account's status privacy settings. The own ID is always added.
+	StatusRecipients []types.JID
 	// use this only if you know what you are doing
 	AdditionalNodes *[]waBinary.Node
 }
@@ -328,7 +331,11 @@ func (cli *Client) SendMessage(ctx context.Context, to types.JID, message *waE2E
 				extraParams.addressingMode = types.AddressingModePN
 			}
 		} else {
-			groupParticipants, err = cli.getBroadcastListParticipants(ctx, to)
+			if to == types.StatusBroadcastJID && len(req.StatusRecipients) > 0 {
+				groupParticipants, err = cli.withOwnID(req.StatusRecipients)
+			} else {
+				groupParticipants, err = cli.getBroadcastListParticipants(ctx, to)
+			}
 			if err != nil {
 				err = fmt.Errorf("failed to get broadcast list members: %w", err)
 				return

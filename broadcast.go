@@ -26,6 +26,12 @@ func (cli *Client) getBroadcastListParticipants(ctx context.Context, jid types.J
 	if err != nil {
 		return nil, err
 	}
+	return cli.withOwnID(list)
+}
+
+// withOwnID returns the list with the own ID appended unless it is already there, so the
+// other devices of this account also receive the broadcast.
+func (cli *Client) withOwnID(list []types.JID) ([]types.JID, error) {
 	ownID := cli.getOwnID().ToNonAD()
 	if ownID.IsEmpty() {
 		return nil, ErrNotLoggedIn
@@ -39,7 +45,7 @@ func (cli *Client) getBroadcastListParticipants(ctx context.Context, jid types.J
 		}
 	}
 	if selfIndex < 0 {
-		list = append(list, ownID)
+		list = append(list[:len(list):len(list)], ownID)
 	}
 	return list, nil
 }
