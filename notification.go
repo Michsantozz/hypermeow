@@ -450,6 +450,7 @@ type newsletterEvent struct {
 	// _on_metadata_update
 	// _on_state_change -> id, is_requestor, state
 	NotifyAccountReachoutTimelock *events.NotifyAccountReachoutTimelock `json:"xwa2_notify_account_reachout_timelock"`
+	MessageCappingUpdate          *events.MessageCappingUpdate          `json:"xwa2_notify_new_chat_messages_capping_info_update"`
 }
 
 func (cli *Client) handleMexNotification(ctx context.Context, node *waBinary.Node) {
@@ -483,6 +484,9 @@ func (cli *Client) handleMexNotification(ctx context.Context, node *waBinary.Nod
 		} else if wrapper.Data.NotifyAccountReachoutTimelock != nil {
 			wrapper.Data.NotifyAccountReachoutTimelock.Mex = mnd
 			cli.dispatchEvent(wrapper.Data.NotifyAccountReachoutTimelock)
+		} else if wrapper.Data.MessageCappingUpdate != nil {
+			wrapper.Data.MessageCappingUpdate.Mex = mnd
+			cli.dispatchEvent(wrapper.Data.MessageCappingUpdate)
 		}
 	}
 }

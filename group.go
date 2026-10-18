@@ -828,6 +828,9 @@ func (cli *Client) parseGroupNode(groupNode *waBinary.Node) (*types.GroupInfo, e
 		case "member_add_mode":
 			modeBytes, _ := child.Content.([]byte)
 			group.MemberAddMode = types.GroupMemberAddMode(modeBytes)
+		case "member_share_group_history_mode":
+			modeBytes, _ := child.Content.([]byte)
+			group.MemberShareHistoryMode = types.GroupMemberShareHistoryMode(modeBytes)
 		case "linked_parent":
 			group.LinkedParentJID = childAG.JID("jid")
 		case "default_sub_group":

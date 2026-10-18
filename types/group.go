@@ -17,6 +17,13 @@ const (
 	GroupMemberAddModeAllMember GroupMemberAddMode = "all_member_add"
 )
 
+type GroupMemberShareHistoryMode string
+
+const (
+	GroupMemberShareHistoryModeAdmin     GroupMemberShareHistoryMode = "admin_share"
+	GroupMemberShareHistoryModeAllMember GroupMemberShareHistoryMode = "all_member_share"
+)
+
 // GroupInfo contains basic information about a group chat on WhatsApp.
 type GroupInfo struct {
 	JID      JID
@@ -44,6 +51,8 @@ type GroupInfo struct {
 	ParticipantCount     int
 
 	MemberAddMode GroupMemberAddMode
+	// Who may send recent messages to new members; empty when the server did not say.
+	MemberShareHistoryMode GroupMemberShareHistoryMode
 
 	// Suspended indicates whether the group is currently paused/suspended.
 	Suspended bool

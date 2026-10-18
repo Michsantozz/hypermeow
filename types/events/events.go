@@ -712,6 +712,12 @@ type NewsletterLiveUpdate struct {
 	Messages []*types.NewsletterMessage
 }
 
+// MessageCappingUpdate is a change in the account's quota of messages that start new chats.
+type MessageCappingUpdate struct {
+	Mex MexNotificationData `json:"-"`
+	types.MessageCappingInfo
+}
+
 type NotifyAccountReachoutTimelock struct {
 	Mex                 MexNotificationData `json:"-"`
 	EnforcementType     string              `json:"enforcement_type,omitempty"`
