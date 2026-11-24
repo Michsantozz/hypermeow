@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/url"
 	"runtime/debug"
+	"slices"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -119,6 +120,9 @@ type Client struct {
 	EnableDecryptedEventBuffer    bool
 	synchronousMessageNameUpdates atomic.Bool
 	lastDecryptedBufferClear      time.Time
+	unifiedSessionLock            sync.Mutex
+	lastUnifiedSessionSend        time.Time
+	UnifiedSessionInterval        time.Duration
 
 	DisableLoginAutoReconnect bool
 
@@ -129,7 +133,10 @@ type Client struct {
 	EmitAppStateEventsOnFullSync   bool
 	EmitLabelEventsOnFullSync      bool
 	EmitQuickReplyEventsOnFullSync bool
-	AppStateDebugLogs              bool
+
+	// EmitStickerEventsOnFullSync emits favorite and recent-removal snapshot events.
+	EmitStickerEventsOnFullSync bool
+	AppStateDebugLogs           bool
 
 	AutomaticMessageRerequestFromPhone bool
 	pendingPhoneRerequests             map[types.MessageID]context.CancelFunc
@@ -137,6 +144,7 @@ type Client struct {
 
 	appStateProc     *appstate.Processor
 	appStateSyncLock sync.Mutex
+	appStateBackoff  map[appstate.WAPatchName]time.Time
 
 	historySyncNotifications        chan historySyncNotification
 	historySyncHandlerStarted       atomic.Bool
@@ -295,12 +303,32 @@ type Client struct {
 	// The user agent to use (for non-Messenger connections).
 	UserAgent        string
 	WebSocketHeaders http.Header
+	// DisablePostConnectPassiveIQ stops the library sending the
+	// `passive`/`active` IQ after a successful connect. Set it when the
+	// client payload already carries `passive: false`, which is what
+	// WhatsApp Web sends; the real client has no such IQ.
+	DisablePostConnectPassiveIQ bool
 }
 
 type groupMetaCache struct {
 	AddressingMode             types.AddressingMode
 	CommunityAnnouncementGroup bool
+	ReadOnly                   bool
 	Members                    []types.JID
+	Admins                     []types.JID
+}
+
+func (gmc *groupMetaCache) CanSend(sender types.JID, message *waE2E.Message) bool {
+	return gmc == nil ||
+		!gmc.ReadOnly ||
+		message.PollUpdateMessage != nil ||
+		message.ReactionMessage != nil ||
+		message.EncReactionMessage != nil ||
+		message.EncEventResponseMessage != nil ||
+		message.QuestionResponseMessage != nil ||
+		message.CommentMessage != nil ||
+		message.EncCommentMessage != nil ||
+		slices.Contains(gmc.Admins, sender.ToNonAD())
 }
 
 type MessengerConfig struct {
@@ -314,6 +342,15 @@ type SocketConfig struct {
 	URL                       string
 	Origin                    string
 	NoiseCertificateAuthority *[32]byte
+	// RaceURLs, when it has more than one entry, makes Connect open every
+	// URL concurrently and keep the one that connects first, closing the
+	// others with code 1000 and the reason "loser socket".
+	//
+	// Use socket.RaceURLs for the endpoints WhatsApp Web races
+	// (WAWebOpenSocket.js:10, 44-52). Loser cleanup runs asynchronously.
+	//
+	// Zero or one entry keeps the single-socket behavior and uses URL above.
+	RaceURLs []string
 }
 
 const handlerQueueSize = 256
@@ -368,6 +405,7 @@ func NewClient(deviceStore *store.Device, log waLog.Logger) *Client {
 		historySyncNotifications: make(chan historySyncNotification, 32),
 
 		GetMessageForRetry: func(requester, to types.JID, id types.MessageID) *waE2E.Message { return nil },
+		appStateBackoff:    make(map[appstate.WAPatchName]time.Time),
 
 		EnableAutoReconnect: true,
 		AutoTrustIdentity:   true,
@@ -576,12 +614,9 @@ func (cli *Client) Connect() error {
 }
 
 func isRetryableConnectError(err error) bool {
-	if exhttp.IsNetworkError(err) {
-		return true
-	}
-
-	var statusErr socket.ErrWithStatusCode
-	if errors.As(err, &statusErr) {
+	// HTTP upgrade rejections take precedence over network failures from
+	// other racers. Joined errors preserve the configured endpoint order.
+	if statusErr, ok := errors.AsType[socket.ErrWithStatusCode](err); ok {
 		switch statusErr.StatusCode {
 		case 408, 500, 501, 502, 503, 504:
 			return true
@@ -590,7 +625,12 @@ func isRetryableConnectError(err error) bool {
 		}
 	}
 
-	return errors.Is(err, socket.ErrDialFailed)
+	if exhttp.IsNetworkError(err) {
+		return true
+	}
+	return errors.Is(err, socket.ErrDialFailed) ||
+		errors.Is(err, ErrHandshakeTimeout) ||
+		errors.Is(err, socket.ErrSocketClosed)
 }
 
 func (cli *Client) ConnectContext(ctx context.Context) error {
@@ -654,6 +694,7 @@ func (cli *Client) unlockedConnect(ctx context.Context) error {
 	}
 	var queue chan *waBinary.Node
 	maps.Copy(fs.HTTPHeaders, cli.WebSocketHeaders)
+	var raceURLs []string
 	if cli.SocketConfig != nil {
 		if cli.SocketConfig.URL != "" {
 			fs.URL = cli.SocketConfig.URL
@@ -661,11 +702,20 @@ func (cli *Client) unlockedConnect(ctx context.Context) error {
 		if cli.SocketConfig.Origin != "" {
 			fs.HTTPHeaders.Set("Origin", cli.SocketConfig.Origin)
 		}
+		raceURLs = cli.SocketConfig.RaceURLs
 	}
-	if err := fs.Connect(ctx); err != nil {
+	if len(raceURLs) > 1 {
+		raced, err := socket.ConnectRace(ctx, cli.Log.Sub("Socket"), client, raceURLs, fs.HTTPHeaders)
+		if err != nil {
+			return err
+		}
+		fs = raced
+	} else if err := fs.Connect(ctx); err != nil {
 		fs.Close(0)
 		return err
-	} else if queue, err = cli.doHandshake(fs, *keys.NewKeyPair()); err != nil {
+	}
+	var err error
+	if queue, err = cli.doHandshake(fs, *keys.NewKeyPair()); err != nil {
 		fs.Close(0)
 		return fmt.Errorf("noise handshake failed: %w", err)
 	}
@@ -1235,7 +1285,7 @@ func (cli *Client) ParseWebMessage(chatJID types.JID, webMsg *waWeb.WebMessageIn
 				return nil, ErrNotLoggedIn
 			}
 		}
-	} else if chatJID.Server == types.DefaultUserServer || chatJID.Server == types.HiddenUserServer || chatJID.Server == types.NewsletterServer {
+	} else if chatJID.Server == types.DefaultUserServer || chatJID.Server == types.HiddenUserServer || chatJID.Server == types.NewsletterServer || chatJID.Server == types.BotServer {
 		info.Sender = chatJID
 	} else if webMsg.GetParticipant() != "" {
 		info.Sender, err = types.ParseJID(webMsg.GetParticipant())
@@ -1292,11 +1342,17 @@ func (cli *Client) getUnifiedSessionID() string {
 	return strconv.FormatInt(unifiedID, 10)
 }
 
-func (cli *Client) sendUnifiedSession() {
+func (cli *Client) sendUnifiedSession(checkLastSend bool) {
 	if cli == nil {
 		return
 	}
-
+	cli.unifiedSessionLock.Lock()
+	if checkLastSend && time.Since(cli.lastUnifiedSessionSend) < cli.UnifiedSessionInterval {
+		cli.unifiedSessionLock.Unlock()
+		return
+	}
+	cli.lastUnifiedSessionSend = time.Now()
+	cli.unifiedSessionLock.Unlock()
 	node := waBinary.Node{
 		Tag:   "ib",
 		Attrs: waBinary.Attrs{},

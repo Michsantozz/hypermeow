@@ -9,7 +9,7 @@ The upstream project remains the smaller choice for applications that only need 
 
 ## Why HyperMeow instead of upstream WhatsMeow?
 
-This comparison was last verified against upstream `main` at [`c386243`](https://github.com/tulir/whatsmeow/commit/c386243a72bacad080ba2938b37e1e4e0f1ca3b2) on 2026-10-10. Each upstream sync must update this section when the difference changes.
+This comparison was last verified against upstream `main` at [`c88388f`](https://github.com/tulir/whatsmeow/commit/c88388f983b4bc43dfd0bcc2b46969fcde82d61f) on 2026-11-12. Each upstream sync must update this section when the difference changes.
 
 | Area | HyperMeow advantage over upstream `main` |
 | --- | --- |
@@ -43,7 +43,7 @@ The complete three-repeat system matrix documents allocation, RSS, CPU, latency,
 
 ## Install
 
-HyperMeow requires Go 1.26 or newer; the module selects Go 1.27.1 as its preferred toolchain.
+HyperMeow requires Go 1.26 or newer; the module selects Go 1.27.2 as its preferred toolchain.
 
 Install the newest reviewed commit from the authoritative `main` branch:
 
@@ -81,6 +81,25 @@ go mod edit -dropreplace=go.mau.fi/whatsmeow
 go get github.com/polymorfa/hypermeow@main
 go mod tidy
 ```
+
+## Newsletter observations
+
+`NewsletterMessage.ViewCounts` preserves the reported view definitions, including
+an untyped legacy count and a separate `views` count. It does not select an
+account's view-definition gate. `ViewsCountPresent` and `ForwardsCountPresent`
+distinguish a reported zero from an absent or malformed counter. The existing
+scalar count fields remain available.
+
+A nil `ReactionCounts` means no valid reaction observation; an allocated empty
+map preserves an explicitly empty list. These observations do not reproduce the
+client's local database reconciliation. Original message IDs and timestamps may
+be absent in a live observation; its server position is a separate reference.
+
+`NewsletterMilestone` accepts quoted and numeric decimal integer positions
+without converting through floating point. An absent, `null` or zero position
+means the milestone has no message (for example a follower-count milestone) and
+decodes as position 0. It rejects negative, empty, fractional and overflowing
+positions. Its JSON output keeps quoted positions.
 
 ## Core compatibility
 
@@ -142,7 +161,47 @@ decode error.
 
 Custom `store.ChatSettingsStore` implementations must add `PutWASARootSecretID`
 and `GetWASARootSecretID` for bot root-secret state. `sqlstore` adds this field
-through schema version 19; its existing migrations remain unchanged.
+through schema version 19; its existing migrations remain unchanged. Schema
+version 20 adds the device `is_hosted` flag for hosted (coexistence) pairing.
+
+## Connection options
+
+Connections use one WebSocket endpoint by default. To try both WhatsApp chat
+endpoints concurrently, configure the client before connecting:
+
+```go
+import (
+    whatsmeow "github.com/polymorfa/hypermeow"
+    "github.com/polymorfa/hypermeow/socket"
+)
+
+// client is an existing *whatsmeow.Client.
+client.SocketConfig = &whatsmeow.SocketConfig{
+    RaceURLs: append([]string(nil), socket.RaceURLs...),
+}
+```
+
+`SocketConfig.RaceURLs` activates racing when it contains at least two URLs.
+The first successful upgrade wins. Pending upgrades are canceled, and opened
+losers close asynchronously with status 1000 and reason `loser socket`.
+The winner proceeds without waiting for those close handshakes. If every
+endpoint fails, the returned error joins the failures in configured URL order.
+Initial background reconnect classification uses the first matching HTTP status
+in configured URL order, ahead of network errors from other endpoints. When no
+HTTP status is present, network and dial failures remain retryable. The existing
+single-endpoint retry rules remain unchanged.
+
+With zero or one race URL, the client uses `SocketConfig.URL`, or the default
+endpoint if `URL` is empty. With racing enabled, the list supplies the endpoints
+and `URL` is ignored. `SocketConfig.Origin` and `Client.WebSocketHeaders` apply to
+all racers. Repeated header values and empty entries that suppress defaults are
+preserved. Browsers control request headers on JS/WASM builds, as they do for
+single-endpoint connections.
+
+`Client.DisablePostConnectPassiveIQ` defaults to `false`. Set it to `true` only
+when your login payload already declares `passive: false`; the client then skips
+the post-connect passive/active IQ. This option does not change the login payload.
+Configure both options before connecting rather than while a connection is active.
 
 ## Discord
 
@@ -190,7 +249,7 @@ See [LICENSING.md](LICENSING.md) for the file-level boundary.
 ### Connection lifecycle observers
 
 `AddConnectionEventHandler(func(context.Context, any))` observes `Connected`,
-`Disconnected`, `QR`, `LoggedOut` and `StreamReplaced`. The context is the original
+`Disconnected`, `QR`, `LoggedOut`, `StreamReplaced` and `CATRefreshError`. The context is the original
 connection's `ConnectContext` argument, captured before asynchronous delivery.
 A delayed event can arrive after that context is cancelled. Compare it with the
 connection authority your application owns before updating state; do not label an

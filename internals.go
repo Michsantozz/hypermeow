@@ -215,8 +215,8 @@ func (int *DangerousInternalClient) GetUnifiedSessionID() string {
 	return int.c.getUnifiedSessionID()
 }
 
-func (int *DangerousInternalClient) SendUnifiedSession() {
-	int.c.sendUnifiedSession()
+func (int *DangerousInternalClient) SendUnifiedSession(checkLastSend bool) {
+	int.c.sendUnifiedSession(checkLastSend)
 }
 
 func (int *DangerousInternalClient) HandleStreamError(ctx context.Context, node *waBinary.Node) {
@@ -653,6 +653,12 @@ func (int *DangerousInternalClient) UploadPreKeys(ctx context.Context, initialUp
 
 func (int *DangerousInternalClient) FetchPreKeysNoError(ctx context.Context, retryDevices []types.JID) map[types.JID]*prekey.Bundle {
 	return int.c.fetchPreKeysNoError(ctx, retryDevices)
+}
+
+// FetchPreKeysWithIdentityNoError fetches prekey bundles and keeps the
+// <device-identity> each companion device's bundle carries.
+func (int *DangerousInternalClient) FetchPreKeysWithIdentityNoError(ctx context.Context, devices []types.JID) map[types.JID]FetchedPreKey {
+	return int.c.fetchPreKeysWithIdentityNoError(ctx, devices)
 }
 
 func (int *DangerousInternalClient) FetchPreKeys(ctx context.Context, users []types.JID) (map[types.JID]preKeyResp, error) {
